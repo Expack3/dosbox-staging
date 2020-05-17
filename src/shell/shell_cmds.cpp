@@ -747,13 +747,10 @@ void DOS_Shell::CMD_LS(char *args)
 
 	do {
 		DtaResult result;
-		dta.GetResult(result.name,
-		              result.size,
-		              result.date,
-		              result.time,
-		              result.attr);
+		dta.GetResult(result.name, result.size, result.date,
+		              result.time, result.attr);
 		results.push_back(result);
-	} while (ret = DOS_FindNext());
+	} while ((ret = DOS_FindNext()) == true);
 
 	size_t w_count = 0;
 	auto maybe_print_nl = [&]() {
