@@ -444,6 +444,45 @@ struct DtaResult {
 
 };
 
+static std::string to_search_pattern(const char *dos_glob)
+{
+	char in[CROSS_LEN];
+	char buffer[CROSS_LEN];
+	safe_strcpy(in, dos_glob);
+
+	char *args = trim(in);
+	const size_t len = strlen(args);
+	const char last_char = (len > 0 ? args[len - 1] : '\0');
+
+	switch (last_char) {
+	case '\0': // No arguments, search for all.
+		strcpy(args, "*.*");
+		break;
+	case '\\': // Handle \, C:\, etc.
+	case ':':  // Handle C:, etc.
+		strcat(args, "*.*"); // FIXME! potential buffer overflow
+		break;
+	default: break;
+	}
+
+	// Handle patterns starting with a dot.
+	args = ExpandDot(args, buffer, CROSS_LEN);
+
+	// When there's no wildcard and target is a directory then search files
+	// inside the directory.
+	if (!strrchr(args, '*') && !strrchr(args, '?')) {
+		uint16_t attr = 0;
+		if (DOS_GetFileAttr(args, &attr) && (attr & DOS_ATTR_DIRECTORY))
+			strcat(args, "\\*.*");
+	}
+
+	// If no extension, list all files.
+	// This makes patterns like foo* work.
+	if (!strrchr(args, '.'))
+		strcat(args, ".*");
+
+	return args;
+}
 
 void DOS_Shell::CMD_DIR(char * args) {
 	HELP("DIR");
@@ -494,6 +533,8 @@ void DOS_Shell::CMD_DIR(char * args) {
 		WriteOut(MSG_Get("SHELL_ILLEGAL_SWITCH"),rem);
 		return;
 	}
+
+	std::string ptrn = to_search_pattern(args);
 
 	char buffer[CROSS_LEN];
 	args = trim(args);
@@ -573,7 +614,9 @@ void DOS_Shell::CMD_DIR(char * args) {
 	RealPt save_dta=dos.dta();
 	dos.dta(dos.tables.tempdta);
 	DOS_DTA dta(dos.dta());
-	fprintf(stderr, ":: %s\n", args);
+
+	fprintf(stderr, ":: %s %s\n", args, ptrn.c_str());
+
 	bool ret=DOS_FindFirst(args,0xffff & ~DOS_ATTR_VOLUME);
 	if (!ret) {
 		if (!optB) WriteOut(MSG_Get("SHELL_CMD_FILE_NOT_FOUND"),args);
