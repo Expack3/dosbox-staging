@@ -744,6 +744,52 @@ void DOS_Shell::CMD_DIR(char * args) {
 void DOS_Shell::CMD_LS(char *args)
 {
 	HELP("LS");
+
+	RealPt save_dta = dos.dta();
+	dos.dta(dos.tables.tempdta);
+	DOS_DTA dta(dos.dta());
+
+	const std::string pattern = to_search_pattern(args);
+	bool ret = DOS_FindFirst(pattern.c_str(), 0xffff & ~DOS_ATTR_VOLUME);
+	if (!ret) {
+		WriteOut(MSG_Get("SHELL_CMD_LS_PATH_ERR"), trim(args));
+		dos.dta(save_dta);
+		return;
+	}
+
+	std::vector<DtaResult> results;
+	// reserve space for as many as we can fit into a single memory page
+	// nothing more to it; make it larger if necessary
+	results.reserve(4096 / sizeof(DtaResult));
+
+	do {
+		DtaResult result;
+		dta.GetResult(result.name, result.size, result.date,
+		              result.time, result.attr);
+		results.push_back(result);
+	} while ((ret = DOS_FindNext()) == true);
+
+	for (const auto &entry : results) {
+		std::string name = entry.name;
+		const bool is_dir = entry.attr & DOS_ATTR_DIRECTORY;
+
+		if (name == "." || name == "..")
+			continue;
+
+		if (is_dir)
+			upcase(name);
+		else
+			lowcase(name);
+
+		if (is_dir) {
+			WriteOut("\033[34;1m%-16s\033[0m", name.c_str());
+			continue;
+		}
+
+		WriteOut("%-16s", name.c_str());
+	}
+	WriteOut("\n");
+	dos.dta(save_dta);
 }
 
 struct copysource {
